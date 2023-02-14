@@ -1,0 +1,111 @@
+using API.Models;
+using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore;
+using System.Reflection;
+
+namespace API.Tools
+{
+    public static class DatabaseContextExtensions
+    {
+        public static (bool HasError, string Message) EntityMatch(this DatabaseContext context ,object entity)
+        {
+            
+            var type = entity.GetType();
+            var entityType = context.Model.FindEntityType(type);
+
+            if (entityType != null && entityType.GetProperties() != null) //Test si on arrive à récupérer les informations de l'objet
+            {
+                var listProperties = entityType.GetProperties();
+
+                foreach (var property in listProperties)
+                {                    
+                    string name = property.Name;
+
+                    try
+                    {
+                        if (entity.GetType().GetProperty(name) == null)  //Vérifie que entity trouve bien des informations sur le type d'objet demander
+                        {
+                            return (true, property.Name + " test 1 PropertyInfo est null"); 
+                        }
+                        PropertyInfo propertyInfo = entity.GetType().GetProperty(name)!;
+                        
+                        object attributeValue = propertyInfo!.GetValue(entity)!;
+
+                        if (NullableTest(property, attributeValue) == false) //Appel la fonction qui vérifie que la propriété peut ou ne peut pas être null
+                        {
+                            return (true, "valeur :" + property.Name + " Null alors que attribut non Nullable"); 
+                        }
+
+                        if (TypeTest(property, attributeValue) == false)  //Appel la fonction qui vérifie que type de la propriété est le bon
+                        {
+                            return (true, property.Name + " Erreur de type"); 
+                        }
+
+                        if (MaxLengthTest(property, attributeValue) == false ) //Appel la fonction qui vérifie que le nombre caractère de la propriété n'excède
+                        {                                                        //pas la limite maximale
+                            return (true, property.Name + " Max length dépassé");
+                        }                        
+                    }
+
+                    catch (Exception e)
+                    {                        
+                        return (true, "false erreur : " + e);
+                    }
+                }
+                /*SendDataTest(entity, context, entityType);*/
+                return (false,"Ça marche");
+
+            }
+            return (true, "false erreur ne récupère aucune infos pour l'objet demandé");
+        }
+
+      /*  public static void SendDataTest(object objectToSend, DatabaseContext context, IEntityType? table)
+        {
+            context.Add<table as Type>(objectToSend as API.Models);
+            context.SaveChanges();
+
+        }*/
+
+        public static Boolean NullableTest(IProperty property, object attributeValue)
+        {
+            if (!property.IsNullable || property.IsKey()) // test si la propriété n'est pas nullable
+                                                          // ou si c'est une clé primaire pour savoir si une valeur est obligatoire
+            {     
+                if (attributeValue == null && property.GetDefaultValueSql() == null) // test si l'attribue n'est pas null et s'il n'y a pas de valeur par défaut
+                {
+                    return false;
+                }
+            }
+            return true;
+
+        }
+
+        public static Boolean TypeTest(IProperty property, object attributeValue) //test si le type de la propriété est le bon
+        {
+            
+            if (attributeValue != null && attributeValue.GetType() != property.ClrType)
+            {
+                return false;
+
+            }
+            return true;
+        }
+
+        public static Boolean MaxLengthTest(IProperty property, object attributeValue) //test s'il y a le bon nombre de caractères
+        {
+            
+            if (attributeValue != null && property.GetMaxLength() != null)
+            { 
+                if (attributeValue!.ToString()!.Length > property.GetMaxLength())
+                {                   
+                    return false;
+                }
+            }
+          
+            return true;
+        }
+
+       
+
+}
+}
